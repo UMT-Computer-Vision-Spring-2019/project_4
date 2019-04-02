@@ -39,18 +39,11 @@ def getPoints(image1URL, image2URL):
     u1 = np.c_[u1,np.ones(u1.shape[0])]
     u2 = np.c_[u2,np.ones(u2.shape[0])]
 
-
     skip = 1
-    #fig = plt.figure(figsize=(12,12))
+
     I_new = np.zeros((h,2*w,3)).astype(int)
     I_new[:,:w,:] = I_1
     I_new[:,w:,:] = I_2
-    #plt.imshow(I_new)
-    ##plt.scatter(u1[::skip,0],u1[::skip,1])
-    #plt.scatter(u2[::skip,0]+w,u2[::skip,1])
-    #[plt.plot([u1[0],u2[0]+w],[u1[1],u2[1]]) for u1,u2 in zip(u1[::skip],u2[::skip])]
-    #plt.show()
-
 
 
     h,w,d = I_1.shape
@@ -72,41 +65,25 @@ def getPoints(image1URL, image2URL):
 
 
     skip = 10
-    #fig = plt.figure(figsize=(12,12))
+
     I_new = np.zeros((h,2*w,3)).astype(int)
     I_new[:,:w,:] = I_1
     I_new[:,w:,:] = I_2
-    #plt.imshow(I_new)
-    #plt.scatter(u1[inliers,0][::skip],u1[inliers,1][::skip])
-    #plt.scatter(u2[inliers,0][::skip]+w,u2[inliers,1][::skip])
-    #[plt.plot([u1[0],u2[0]+w],[u1[1],u2[1]]) for u1,u2 in zip(u1[inliers][::skip],u2[inliers][::skip])]
-    #plt.show()
 
 
     n_in,R,t,_ = cv2.recoverPose(E,x1[inliers,:2],x2[inliers,:2])
-    #print(R,t)
-
 
     P_1 = np.array([[1,0,0,0],
                     [0,1,0,0],
                     [0,0,1,0]])
     P_2 = np.hstack((R,t))
-    #print(P_1,P_2)
-
 
     P_1c = K_cam @ P_1
     P_2c = K_cam @ P_2
     #print(P_1c)
     #print(P_2c)
 
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    for point1, point2 in zip(x1, x2):
-        vt = triangulate(P_1c, P_2c, point1, point2)
-        #print(vt)
-        ax.scatter(vt[0], vt[1], zs=vt[2])
 
-    plt.show()
     return(x1,x2,P_1c,P_2c)
 
 
@@ -124,4 +101,20 @@ def triangulate(P0,P1,x1,x2):
 
 
 x1,x2,p1,p2 = getPoints(sys.argv[1],sys.argv[2])
-print(x1,x2,p1,p2)
+x2p,x3,p2p,p3p = getPoints(sys.argv[2],sys.argv[3])
+
+p3 = p2*p3p
+print(p2)
+print(p3p)
+print(p3)
+fig = plt.figure()
+ax = fig.add_subplot(111, projection='3d')
+for point1, point2, point2p, point3 in zip(x1, x2, x2p, x3):
+    #vt1 = triangulate(p1, p2, point1, point2)
+    vt2 = triangulate(p2p, p3p, point2p, point3)
+    #ax.scatter(vt1[0], vt1[1], zs=vt1[2])
+    ax.scatter(vt2[0], vt2[1], zs=vt2[2])
+    #vt = triangulate(p2,p3,point2,point3)
+    #ax.scatter(vt[0], vt[1], zs=vt[2])
+
+plt.show()
