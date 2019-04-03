@@ -86,10 +86,9 @@ def getPoints(image1URL, image2URL):
 
     return(x1,x2,P_1c,P_2c)
 
-
 def triangulate(P0,P1,x1,x2):
     # P0,P1: projection matrices for each of two cameras/images
-    # x1,x1: corresponding points in each of two images (If using P that has been scaled by K, then use camera
+    # x1,x2: corresponding points in each of two images (If using P that has been scaled by K, then use camera
     # coordinates, otherwise use generalized coordinates)
     A = np.array([[P0[2,0]*x1[0] - P0[0,0], P0[2,1]*x1[0] - P0[0,1], P0[2,2]*x1[0] - P0[0,2], P0[2,3]*x1[0] - P0[0,3]],
                   [P0[2,0]*x1[1] - P0[1,0], P0[2,1]*x1[1] - P0[1,1], P0[2,2]*x1[1] - P0[1,2], P0[2,3]*x1[1] - P0[1,3]],
@@ -101,20 +100,18 @@ def triangulate(P0,P1,x1,x2):
 
 
 x1,x2,p1,p2 = getPoints(sys.argv[1],sys.argv[2])
-x2p,x3,p2p,p3p = getPoints(sys.argv[2],sys.argv[3])
+
+temp,x3,p2p,p3p = getPoints(sys.argv[2],sys.argv[3])
 
 p3 = p2*p3p
-print(p2)
-print(p3p)
-print(p3)
+
 fig = plt.figure()
 ax = fig.add_subplot(111, projection='3d')
-for point1, point2, point2p, point3 in zip(x1, x2, x2p, x3):
-    #vt1 = triangulate(p1, p2, point1, point2)
-    vt2 = triangulate(p2p, p3p, point2p, point3)
-    #ax.scatter(vt1[0], vt1[1], zs=vt1[2])
+for point1, point2, x2p, point3 in zip(x1, x2, temp, x3):
+    vt1 = triangulate(p1, p2, point1, point2)
+    vt2 = triangulate(p2p, p3p, x2p, point3)
+    ax.scatter(vt1[0], vt1[1], zs=vt1[2])
     ax.scatter(vt2[0], vt2[1], zs=vt2[2])
-    #vt = triangulate(p2,p3,point2,point3)
-    #ax.scatter(vt[0], vt[1], zs=vt[2])
+
 
 plt.show()
