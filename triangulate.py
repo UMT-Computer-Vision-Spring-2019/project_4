@@ -4,6 +4,74 @@ import numpy as np
 import cv2
 import piexif
 import sys
+
+def projective_transform(X):
+    projected = np.array([])
+    x = X[:,0]/X[:,2]
+    y = X[:,1]/X[:,2]
+    u = self.f * x + self.c[0]/2
+    v = self.f * y + self.c[1]/2
+    return u,v
+def rotational_transform( X, p):
+    cosAz= np.cos(p[3])
+    sinAz= np.sin(p[3])
+    cosPch= np.cos(p[4])
+    sinPch= np.sin(p[4])
+
+    cosRoll= np.cos(p[5])
+    sinRoll= np.sin(p[5])
+
+    T = np.mat([
+    [1, 0, 0,-p[0]],
+    [0, 1, 0,-p[1]],
+    [0, 0, 1,-p[2]],
+    [0, 0, 0, 1]])
+
+    Ryaw = np.mat([
+    [cosAz, -sinAz, 0, 0],
+    [sinAz, cosAz, 0, 0],
+    [0, 0, 1, 0]])
+
+    Rpitch = np.mat([
+    [1, 0, 0],
+    [0, cosPch, sinPch],
+    [0, -sinPch, cosPch]])
+
+    Rroll = np.mat([
+    [cosRoll, 0, -sinRoll],
+    [0, 1, 0 ],
+    [sinRoll, 0 , cosRoll]])
+
+    Raxis = np.mat([
+    [1, 0, 0],
+    [0, 0, -1],
+    [0, 1 , 0]])
+
+    C = Raxis @ Rroll @ Rpitch @ Ryaw @ T
+
+    X = X.dot(C.T)
+
+    u,v = self.projective_transform(X)
+
+    return u,v
+
+def estimate_pose(X_gcp,u_gcp,p):
+    """
+    This function adjusts the pose vector such that the difference between the observed pixel coordinates u_gcp
+    and the projected pixels coordinates of X_gcp is minimized.
+    """
+    p_opt = ls(self.residual, p, method='lm',args=(X_gcp,u_gcp))['x']
+    return p_opt
+
+def residual(self,p,X,u_gcp):
+    u,v = self.rotational_transform(X,p)
+    u = np.squeeze(np.asarray(u - u_gcp[:,0]))
+    v = np.squeeze(np.asarray(v - u_gcp[:,1]))
+    resid = np.stack((u, v), axis=-1)
+    resid = resid.flatten()
+    return resid
+
+
 def getPoints(image1URL, image2URL):
 
     I_1 = plt.imread(image1URL)
@@ -101,17 +169,21 @@ def triangulate(P0,P1,x1,x2):
 
 x1,x2,p1,p2 = getPoints(sys.argv[1],sys.argv[2])
 
-temp,x3,p2p,p3p = getPoints(sys.argv[2],sys.argv[3])
+x2p,x3,p2p,p3 = getPoints(sys.argv[2],sys.argv[3])
 
-p3 = p2*p3p
+#Append 1s to each row to make them the same shape so the following works.
+p3 = p2 @ p3
 
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-for point1, point2, x2p, point3 in zip(x1, x2, temp, x3):
-    vt1 = triangulate(p1, p2, point1, point2)
-    vt2 = triangulate(p2p, p3p, x2p, point3)
-    ax.scatter(vt1[0], vt1[1], zs=vt1[2])
-    ax.scatter(vt2[0], vt2[1], zs=vt2[2])
+#Pose estimation for points to get accurate pose 3.
+
+
+#fig = plt.figure()
+#ax = fig.add_subplot(111, projection='3d')
+#for point1, point2, point3 in zip(x1, x2, x3):
+#    vt1 = triangulate(p1, p2, point1, point2)
+#    vt2 = triangulate(p2, p3, point2, point3)
+#    ax.scatter(vt1[0], vt1[1], zs=vt1[2])
+#    ax.scatter(vt2[0], vt2[1], zs=vt2[2])
 
 
 plt.show()
