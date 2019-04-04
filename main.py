@@ -1,12 +1,13 @@
 import sys
+
 import matplotlib.pyplot as plt
-from SIFTWrapper import *
 from PIL import Image, ExifTags
-import numpy as np
+from scipy.optimize import least_squares
+
+from SIFTWrapper import *
 
 # Need this to plot 3d
 from mpl_toolkits.mplot3d import axes3d
-from Camera import *
 
 
 def triangulate(P0, P1, x1, x2):
@@ -49,8 +50,8 @@ def plot_matches(img1, u1, img2, u2, skip=10):
 
 # TODO: switch to piexif
 def get_intrinsic_params(img):
-    # Get relevant exif data
 
+    # Get relevant exif data
     exif = {ExifTags.TAGS[k]: v for k, v in img._getexif().items() if k in ExifTags.TAGS}
 
     f_length_35 = int(exif['FocalLengthIn35mmFilm'])
@@ -60,8 +61,8 @@ def get_intrinsic_params(img):
     f_length = round(f_length_35 / 36 * w, 4)
     sensor_size = (w // 2, h // 2)
 
-    print("focal length:", f_length)
-    print("sensor size:", sensor_size, '\n')
+    # print("focal length:", f_length)
+    # print("sensor size:", sensor_size, '\n')
 
     return f_length, sensor_size
 
@@ -104,14 +105,9 @@ def get_inliers(u1, u2, K):
     # return np.hstack((R, t)), x1[inliers, :2], x2[inliers, :2]
 
 
-def plot_3d(pts, ax, colors=None):
-
+def plot_3d(pts, ax, color):
     pts = np.asarray(pts)
-
-    for point in pts:
-        print(point)
-        x, y, z = point
-        ax.scatter(x, y, z, alpha=0.8, edgecolors='none', s=30)
+    ax.scatter(pts[:, 0], pts[:, 1], pts[:, 2], c=color, alpha=1.0)
 
 
 def get_point_estimates(P0, P1, x1, x2):
@@ -165,34 +161,16 @@ def compute_best_matches(kp1, des1, kp2, des2, r):
 
 def get_gcp_mask(orig_inliers, new_inliers):
 
-    u_mask = np.full(shape=len(new_inliers), fill_value=False)
     three_d_mask = np.full(shape=len(orig_inliers), fill_value=False)
+    u_mask = np.full(shape=len(new_inliers), fill_value=False)
 
     for i, new in enumerate(new_inliers):
         for j, orig in enumerate(orig_inliers):
 
-            if np.array_equal(orig, new):
+            if np.allclose(orig, new):
                 u_mask[i] = True
                 three_d_mask[j] = True
                 break
-
-    # print(orig_inliers[mask])
-
-    # mask = np.full(shape=len(x2_2_inliers), fill_value=False)
-    #
-    # tmp_mask = np.full(shape=len(x2_1_inliers), fill_value=False)
-    #
-    # # Find set of points which have matches
-    # # in all 3 pictures
-    # for i, x2_2 in enumerate(x2_2_inliers):
-    #     for j, x2_1 in enumerate(x2_1_inliers):
-    #
-    #         if np.array_equal(x2_1, x2_2):
-    #             mask[i] = True
-    #             tmp_mask[j] = True
-    #
-    # for m1, m2 in zip(x2_2_inliers[mask], x2_1_inliers[tmp_mask]):
-    #     print(m1, '\t', m2)
 
     return u_mask, three_d_mask
 
@@ -202,7 +180,6 @@ def estimate_translation(X_gcp, u_gcp, t0, R, P0):
     This function adjusts the translation vector such that the difference between the observed real world coordinates
     X_gcp and the triangulated real world coordinates of u_gcp is minimized.
     """
-
     # Note: u_gcp is of the form [u1, v1, u2, v2]
     x1, x2 = u_gcp[:, :2], u_gcp[:, 2:]
     t = t0.copy()
@@ -216,7 +193,7 @@ def estimate_translation(X_gcp, u_gcp, t0, R, P0):
         return xyz.ravel() - X_gcp.ravel()
 
     res = least_squares(residuals, t, method='lm', args=(X_gcp, x1, x2, R, P0))
-    print(res)
+    # print(res)
     return res.x
 
 
@@ -259,11 +236,6 @@ def main(argv):
     # Estimate points
     point_estimates = get_point_estimates(P_0, P_1, x1_inliers, x2_1_inliers)
 
-    # Plot points
-    # colors = np.asarray(['g'] * len(point_estimates), dtype=st\ r)
-    # plot_3d(point_estimates, ax)
-    # plt.show()
-
     # Compute keypoints for image 3
     kp3, des3 = compute_keypoints(im_3)
 
@@ -299,29 +271,21 @@ def main(argv):
 
     P_2 = np.column_stack((R, t_est))
 
-    # FIXME
-    # second_pt_estimates = get_point_estimates(P_1, P_2, (x2_2_inliers[u_mask]), (x3_inliers[u_mask]))
     second_pt_estimates = get_point_estimates(P_1, P_2, x2_2_inliers, x3_inliers)
-
-    print("point estimate:", second_pt_estimates[0])
-    print("point actual:", X_gcp[0])
-    print("average distance b/w predicted and observed:", np.sum(np.sqrt(np.sum(np.square(second_pt_estimates[u_mask] - X_gcp)))) / len(X_gcp))
 
     u_mask_inv = np.invert(u_mask)
     new_points = second_pt_estimates[u_mask_inv]
-    num_new = len(new_points)
 
-    print(num_new, "new points were recovered out of", len(second_pt_estimates))
+    plot_3d(point_estimates, ax, 'r')
+    plot_3d(new_points, ax, 'b')
+    plt.show()
 
-    # np.row_stack((point_estimates, np.asarray(new_points)))
+    # print("point estimate:", second_pt_estimates[0])
+    # print("point actual:", X_gcp[0])
+    # print("average distance b/w predicted and observed:", np.sum(np.sqrt(np.sum(np.square(second_pt_estimates[u_mask] - X_gcp)))) / len(X_gcp))
 
-    # fig = plt.figure()
-    # ax = fig.gca(projection='3d')
-    #
-    # Plot points
-    # colors = np.asarray(['b'] * len(point_estimates), dtype=str)
-    # plot_3d(point_estimates, ax)
-    # plt.show()
+    # num_new = len(new_points)
+    # print(num_new, "new points were recovered out of", len(second_pt_estimates))
 
 
 if __name__ == '__main__':
