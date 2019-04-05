@@ -6,35 +6,6 @@ import piexif
 from scipy.optimize import least_squares
 import sys
 
-
-def estimate_pose(pair1, pair2, cidx1, cidx2, X1, P3_est):
-    R = P3_est[:, :-1]
-    t0 = P3_est[:, -1].reshape((3, 1))
-    P2 = pair1.P_2
-    P2c = pair1.K @ P2
-
-    targets = X1[cidx1]
-    r0 = cv2.Rodrigues(R)[0]
-    p0 = list(r0.ravel())
-    p0.extend(t0.ravel())
-    u1 = pair2.u1[cidx2]
-    u2 = pair2.u2[cidx2]
-
-    def residuals(p):
-        R = cv2.Rodrigues(p[:3])[0]
-        t = p[3:].reshape((3, 1))
-        P3 = np.hstack((R, t))
-        P3c = pair2.K @ P3
-        Xest = triangulate(P2c, P3c, u1, u2)
-        return targets.ravel() - Xest.ravel()
-
-    res = least_squares(residuals, p0)
-    p = res.x
-    R = cv2.Rodrigues(p[:3])[0]
-    t = p[3:].reshape((3, 1))
-    P = np.hstack((R, t))
-    return P
-
 def loadImages(imageURLs):
     imgs = []
     for URL in imageURLs:
@@ -143,6 +114,8 @@ def plot(X):
     for vt in X:
         ax.scatter(vt[0], vt[1], zs=vt[2])
     plt.show()
+
+
 #hardcoaded image URLs
 imageURLs = ["falcon/DSC03919.JPG", "falcon/DSC03920.JPG", "falcon/DSC03921.JPG"]
 
@@ -174,8 +147,6 @@ x3,x4,p3,p4 = ransacPose(images[1],images[2], matches[1],desc_array[1],desc_arra
 
 #Pose guess
 p4_e = affine_mult(p3,p4)
-
-
 
 for point1, point2 in zip(x1,x2):
     X12.append(triangulate(p1, p2, point1, point2))
