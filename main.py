@@ -197,6 +197,19 @@ def estimate_translation(X_gcp, u_gcp, t0, R, P0):
     return res.x
 
 
+def calc_final_error(P_1, P_2, shared_uv, observed_points):
+
+    x2_inliers, x3_inliers = shared_uv[:, :2], shared_uv[:, 2:]
+
+    predicted_points = get_point_estimates(P_1, P_2, x2_inliers, x3_inliers)
+
+    rand_idx = np.random.randint(0, len(observed_points))
+    print("Predicted point:", predicted_points[rand_idx])
+    print("Observed point:", observed_points[rand_idx])
+    print("Average distance between predicted and observed:",
+          np.sum(np.sqrt(np.sum(np.square(predicted_points - observed_points)))) / len(observed_points))
+
+
 def main(argv):
 
     if len(argv) != 3:
@@ -254,11 +267,32 @@ def main(argv):
     # the translation is also correct, up to scale.
     P_2_init = (P_1_gen @ P_2_prime_gen)[:3]
 
+    # FIXME: Something with get_gcp_mask is probably broken.
+    # Get a shape error in estimate_translation...
+
     # Find set of points for which we have 3D estimates
     u_mask, three_d_mask = get_gcp_mask(u2_1_inliers, u2_2_inliers)
 
-    X_gcp = point_estimates[three_d_mask]
-    u_gcp = np.column_stack((x2_2_inliers[u_mask], x3_inliers[u_mask]))
+    X_gcp = []
+
+    # FIXME:
+    # X_gcp = point_estimates[three_d_mask]
+    # u_gcp = np.column_stack((x2_2_inliers[u_mask], x3_inliers[u_mask]))
+
+    # TODO: Could make this faster
+    shared_points = []
+    for x2_2, x3 in zip(x2_2_inliers, x3_inliers):
+        for i, x2_1 in enumerate(x2_1_inliers):
+
+            if np.allclose(x2_2, x2_1):
+
+                # Use x2_1 inliers b/c they assume that the camera in img 1 is
+                # the origin.
+                shared_points.append((x2_1, x3))
+                X_gcp.append(point_estimates[i])
+
+    X_gcp = np.array(X_gcp)
+    shared_points = np.array(shared_points).reshape(len(shared_points), 4)
 
     t0 = P_2_init[:, 3]
     R = P_2_init[:, :3]
@@ -267,7 +301,7 @@ def main(argv):
     # This essentially fixes the scaling on the translation vector
     # Note that we could make this a bit easier / faster by optimizing only the scale
     # of the translation vector
-    t_est = estimate_translation(X_gcp, u_gcp, t0, R, P_1)
+    t_est = estimate_translation(X_gcp, shared_points, t0, R, P_1)
 
     P_2 = np.column_stack((R, t_est))
 
@@ -280,12 +314,12 @@ def main(argv):
     plot_3d(new_points, ax, 'b')
     plt.show()
 
-    # print("point estimate:", second_pt_estimates[0])
-    # print("point actual:", X_gcp[0])
-    # print("average distance b/w predicted and observed:", np.sum(np.sqrt(np.sum(np.square(second_pt_estimates[u_mask] - X_gcp)))) / len(X_gcp))
+    calc_final_error(P_1, P_2, shared_points, X_gcp)
 
-    # num_new = len(new_points)
-    # print(num_new, "new points were recovered out of", len(second_pt_estimates))
+    num_new = len(new_points)
+    num_all = len(second_pt_estimates)
+    print(num_new, "new points were recovered out of", num_all,
+          "possible (~{0:.0f}%)".format((num_new / num_all) * 100))
 
 
 if __name__ == '__main__':
